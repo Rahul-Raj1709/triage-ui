@@ -1,13 +1,11 @@
 import React from "react";
 import { Copy, Check, Plus } from "lucide-react";
 
-interface TriageDashboardProps {
-  serviceName: string;
-  setServiceName: (value: string | ((prev: string) => string)) => void;
-  alertMessage: string;
-  setAlertMessage: (value: string | ((prev: string) => string)) => void;
-  report: string;
-  setReport: (value: string | ((prev: string) => string)) => void;
+interface UiDeveloperDashboardProps {
+  problemDescription: string;
+  setProblemDescription: (value: string | ((prev: string) => string)) => void;
+  codeOutput: string;
+  setCodeOutput: (value: string | ((prev: string) => string)) => void;
   isGenerating: boolean;
   setIsGenerating: (value: boolean) => void;
   copied: boolean;
@@ -16,42 +14,43 @@ interface TriageDashboardProps {
   setHistory: (value: Array<{ id: string; title: string }>) => void;
 }
 
-export default function TriageDashboard({
-  serviceName,
-  setServiceName,
-  alertMessage,
-  setAlertMessage,
-  report,
-  setReport,
+export default function UiDeveloperDashboard({
+  problemDescription,
+  setProblemDescription,
+  codeOutput,
+  setCodeOutput,
   isGenerating,
   setIsGenerating,
   copied,
   setCopied,
   history,
   setHistory,
-}: TriageDashboardProps) {
+}: UiDeveloperDashboardProps) {
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(report);
+    await navigator.clipboard.writeText(codeOutput);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleTriage = async (e: React.FormEvent) => {
+  const handleGenerateCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!serviceName.trim() || !alertMessage.trim()) return;
+    if (!problemDescription.trim()) return;
 
-    setReport("");
+    setCodeOutput("");
     setIsGenerating(true);
 
     try {
-      const response = await fetch("https://localhost:7290/api/triage/stream", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
+      const response = await fetch(
+        "https://localhost:7290/api/ui-agent/stream",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "text/event-stream",
+          },
+          body: JSON.stringify({ problemDescription }),
         },
-        body: JSON.stringify({ serviceName, alertMessage }),
-      });
+      );
 
       if (!response.ok) throw new Error("Network response was not ok");
       if (!response.body) throw new Error("ReadableStream not supported");
@@ -74,11 +73,13 @@ export default function TriageDashboard({
               setIsGenerating(false);
 
               // Add to history
-              if (serviceName.trim()) {
+              if (problemDescription.trim()) {
                 setHistory([
                   {
                     id: Date.now().toString(),
-                    title: `${serviceName} - Alert`,
+                    title:
+                      problemDescription.substring(0, 30) +
+                      (problemDescription.length > 30 ? "..." : ""),
                   },
                   ...history,
                 ]);
@@ -89,7 +90,7 @@ export default function TriageDashboard({
             if (dataStr) {
               try {
                 const parsed = JSON.parse(dataStr);
-                setReport((prev) => prev + parsed.text);
+                setCodeOutput((prev) => prev + parsed.text);
               } catch (err) {
                 console.warn("Skipped partial chunk", dataStr);
               }
@@ -98,8 +99,8 @@ export default function TriageDashboard({
         }
       }
     } catch (error) {
-      console.error("Failed to stream triage report:", error);
-      setReport(
+      console.error("Failed to stream UI code:", error);
+      setCodeOutput(
         (prev) => prev + "\n\n**Error:** Connection lost or timeout exceeded.",
       );
     } finally {
@@ -114,7 +115,7 @@ export default function TriageDashboard({
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <button className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-sm font-semibold">
             <Plus size={18} />
-            New Report
+            New Chat
           </button>
         </div>
 
@@ -142,22 +143,16 @@ export default function TriageDashboard({
         {/* Output Area */}
         <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center justify-start scrollbar-hide">
           <div className="w-full max-w-2xl">
-            {report ? (
+            {codeOutput ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                      Service: {serviceName}
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                      Alert: {alertMessage.substring(0, 50)}
-                      {alertMessage.length > 50 ? "..." : ""}
-                    </p>
-                  </div>
-                  {report && (
+                  <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                    GeneratedComponent.tsx
+                  </h2>
+                  {codeOutput && (
                     <button
                       onClick={handleCopy}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium transition-colors whitespace-nowrap">
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium transition-colors">
                       {copied ? (
                         <>
                           <Check size={14} />
@@ -166,23 +161,23 @@ export default function TriageDashboard({
                       ) : (
                         <>
                           <Copy size={14} />
-                          Copy report
+                          Copy code
                         </>
                       )}
                     </button>
                   )}
                 </div>
-                <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-lg p-6 whitespace-pre-wrap text-sm leading-relaxed max-h-96 overflow-y-auto scrollbar-hide">
-                  {report}
-                </div>
+                <pre className="bg-gray-900 dark:bg-[#1e1e1e] text-gray-100 p-6 rounded-lg overflow-x-auto text-xs leading-relaxed border border-gray-700 dark:border-gray-800 scrollbar-hide">
+                  <code>{codeOutput}</code>
+                </pre>
               </div>
             ) : (
               <div className="text-center py-20">
-                <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-600 to-purple-500 dark:from-purple-400 dark:to-purple-300 bg-clip-text text-transparent">
-                  SRE Triage Agent
+                <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">
+                  AI UI Generator
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 text-lg">
-                  Automatically analyze and resolve service incidents
+                  Describe a React component and watch it come to life
                 </p>
               </div>
             )}
@@ -191,39 +186,27 @@ export default function TriageDashboard({
 
         {/* Input Area */}
         <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#131313] p-8">
-          <form onSubmit={handleTriage} className="max-w-2xl mx-auto">
+          <form onSubmit={handleGenerateCode} className="max-w-2xl mx-auto">
             <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="Service name..."
-                  className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 scrollbar-hide"
-                  disabled={isGenerating}
-                />
-                <textarea
-                  value={alertMessage}
-                  onChange={(e) => setAlertMessage(e.target.value)}
-                  placeholder="Alert message..."
-                  className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 resize-none scrollbar-hide"
-                  rows={1}
-                  disabled={isGenerating}
-                />
-              </div>
+              <textarea
+                value={problemDescription}
+                onChange={(e) => setProblemDescription(e.target.value)}
+                placeholder="Describe the component you want to build..."
+                className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500 resize-none text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 scrollbar-hide"
+                rows={3}
+                disabled={isGenerating}
+              />
               <button
                 type="submit"
-                disabled={
-                  isGenerating || !serviceName.trim() || !alertMessage.trim()
-                }
-                className="w-full px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white dark:text-white font-medium transition-colors flex items-center justify-center gap-2 text-sm">
+                disabled={isGenerating || !problemDescription.trim()}
+                className="w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white dark:text-white font-medium transition-colors flex items-center justify-center gap-2 text-sm">
                 {isGenerating ? (
                   <>
                     <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                    Analyzing...
+                    Generating...
                   </>
                 ) : (
-                  "Run Triage"
+                  "Generate Component"
                 )}
               </button>
             </div>
