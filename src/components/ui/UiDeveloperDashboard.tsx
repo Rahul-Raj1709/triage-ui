@@ -1,17 +1,18 @@
-import React from "react";
+import React, { useState } from "react";
 import { Copy, Check, Plus } from "lucide-react";
+import type { Dispatch, SetStateAction } from "react";
 
 interface UiDeveloperDashboardProps {
   problemDescription: string;
-  setProblemDescription: (value: string | ((prev: string) => string)) => void;
+  setProblemDescription: Dispatch<SetStateAction<string>>;
   codeOutput: string;
-  setCodeOutput: (value: string | ((prev: string) => string)) => void;
+  setCodeOutput: Dispatch<SetStateAction<string>>;
   isGenerating: boolean;
-  setIsGenerating: (value: boolean) => void;
+  setIsGenerating: Dispatch<SetStateAction<boolean>>;
   copied: boolean;
-  setCopied: (value: boolean) => void;
+  setCopied: Dispatch<SetStateAction<boolean>>;
   history: Array<{ id: string; title: string }>;
-  setHistory: (value: Array<{ id: string; title: string }>) => void;
+  setHistory: Dispatch<SetStateAction<Array<{ id: string; title: string }>>>;
 }
 
 export default function UiDeveloperDashboard({
@@ -26,6 +27,9 @@ export default function UiDeveloperDashboard({
   history,
   setHistory,
 }: UiDeveloperDashboardProps) {
+  const [workspacePath, setWorkspacePath] = useState("");
+  const [targetFileToRead, setTargetFileToRead] = useState("");
+
   const handleCopy = async () => {
     await navigator.clipboard.writeText(codeOutput);
     setCopied(true);
@@ -36,7 +40,7 @@ export default function UiDeveloperDashboard({
     e.preventDefault();
     if (!problemDescription.trim()) return;
 
-    setCodeOutput("");
+    setCodeOutput(""); // Clear previous output
     setIsGenerating(true);
 
     try {
@@ -48,7 +52,11 @@ export default function UiDeveloperDashboard({
             "Content-Type": "application/json",
             Accept: "text/event-stream",
           },
-          body: JSON.stringify({ problemDescription }),
+          body: JSON.stringify({
+            problemDescription,
+            workspacePath,
+            targetFileToRead,
+          }),
         },
       );
 
@@ -77,9 +85,7 @@ export default function UiDeveloperDashboard({
                 setHistory([
                   {
                     id: Date.now().toString(),
-                    title:
-                      problemDescription.substring(0, 30) +
-                      (problemDescription.length > 30 ? "..." : ""),
+                    title: problemDescription.substring(0, 50) + "...",
                   },
                   ...history,
                 ]);
@@ -115,7 +121,7 @@ export default function UiDeveloperDashboard({
         <div className="p-4 border-b border-gray-200 dark:border-gray-800">
           <button className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-sm font-semibold">
             <Plus size={18} />
-            New Chat
+            New Generation
           </button>
         </div>
 
@@ -146,13 +152,19 @@ export default function UiDeveloperDashboard({
             {codeOutput ? (
               <div className="space-y-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                    GeneratedComponent.tsx
-                  </h2>
+                  <div>
+                    <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
+                      Generated Component
+                    </h2>
+                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                      Problem: {problemDescription.substring(0, 50)}
+                      {problemDescription.length > 50 ? "..." : ""}
+                    </p>
+                  </div>
                   {codeOutput && (
                     <button
                       onClick={handleCopy}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium transition-colors">
+                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium transition-colors whitespace-nowrap">
                       {copied ? (
                         <>
                           <Check size={14} />
@@ -167,17 +179,17 @@ export default function UiDeveloperDashboard({
                     </button>
                   )}
                 </div>
-                <pre className="bg-gray-900 dark:bg-[#1e1e1e] text-gray-100 p-6 rounded-lg overflow-x-auto text-xs leading-relaxed border border-gray-700 dark:border-gray-800 scrollbar-hide">
-                  <code>{codeOutput}</code>
-                </pre>
+                <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-lg p-6 whitespace-pre-wrap text-sm leading-relaxed max-h-96 overflow-y-auto scrollbar-hide font-mono">
+                  {codeOutput}
+                </div>
               </div>
             ) : (
               <div className="text-center py-20">
                 <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-blue-600 to-blue-500 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">
-                  AI UI Generator
+                  UI Developer Agent
                 </h1>
                 <p className="text-gray-600 dark:text-gray-400 text-lg">
-                  Describe a React component and watch it come to life
+                  Describe a component and let the expert agent build it for you
                 </p>
               </div>
             )}
@@ -188,13 +200,32 @@ export default function UiDeveloperDashboard({
         <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#131313] p-8">
           <form onSubmit={handleGenerateCode} className="max-w-2xl mx-auto">
             <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <input
+                  type="text"
+                  value={workspacePath}
+                  onChange={(e) => setWorkspacePath(e.target.value)}
+                  placeholder="Workspace path (Optional)..."
+                  className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 scrollbar-hide"
+                  disabled={isGenerating}
+                />
+                <input
+                  type="text"
+                  value={targetFileToRead}
+                  onChange={(e) => setTargetFileToRead(e.target.value)}
+                  placeholder="Target file to read (Optional)..."
+                  className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 scrollbar-hide"
+                  disabled={isGenerating}
+                />
+              </div>
               <textarea
                 value={problemDescription}
                 onChange={(e) => setProblemDescription(e.target.value)}
-                placeholder="Describe the component you want to build..."
-                className="w-full px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500 resize-none text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 scrollbar-hide"
-                rows={3}
+                placeholder="Describe your component..."
+                className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 resize-none scrollbar-hide w-full"
+                rows={2}
                 disabled={isGenerating}
+                required
               />
               <button
                 type="submit"
@@ -206,7 +237,7 @@ export default function UiDeveloperDashboard({
                     Generating...
                   </>
                 ) : (
-                  "Generate Component"
+                  "Generate Code"
                 )}
               </button>
             </div>
