@@ -1,235 +1,198 @@
-import React from "react";
-import { Copy, Check, Plus } from "lucide-react";
-
-interface TriageDashboardProps {
-  serviceName: string;
-  setServiceName: (value: string | ((prev: string) => string)) => void;
-  alertMessage: string;
-  setAlertMessage: (value: string | ((prev: string) => string)) => void;
-  report: string;
-  setReport: (value: string | ((prev: string) => string)) => void;
-  isGenerating: boolean;
-  setIsGenerating: (value: boolean) => void;
-  copied: boolean;
-  setCopied: (value: boolean) => void;
-  history: Array<{ id: string; title: string }>;
-  setHistory: (value: Array<{ id: string; title: string }>) => void;
+import { useState, useRef, useEffect } from "react";
+interface TriageResult {
+  severity: "Critical" | "High" | "Warning" | "Low";
+  rootCause: string;
+  recommendedAction: string;
+  requiresCodeChange: boolean;
 }
 
-export default function TriageDashboard({
-  serviceName,
-  setServiceName,
-  alertMessage,
-  setAlertMessage,
-  report,
-  setReport,
-  isGenerating,
-  setIsGenerating,
-  copied,
-  setCopied,
-  history,
-  setHistory,
-}: TriageDashboardProps) {
-  const handleCopy = async () => {
-    await navigator.clipboard.writeText(report);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+export default function TriageDashboard() {
+  const [serviceName, setServiceName] = useState("PaymentAPI");
+  const [alertMessage, setAlertMessage] = useState("Network Latency");
+  const [mode, setMode] = useState<"json" | "stream">("stream");
 
-  const handleTriage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!serviceName.trim() || !alertMessage.trim()) return;
+  const [loading, setLoading] = useState(false);
+  const [jsonResult, setJsonResult] = useState<TriageResult | null>(null);
+  const [streamLog, setStreamLog] = useState<string>("");
 
-    setReport("");
-    setIsGenerating(true);
+  const endOfLogRef = useRef<HTMLDivElement>(null);
+
+  // Auto-scroll the stream log as the agents type
+  useEffect(() => {
+    endOfLogRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [streamLog]);
+
+  const runTriage = async () => {
+    setLoading(true);
+    setJsonResult(null);
+    setStreamLog("");
 
     try {
-      const response = await fetch("https://localhost:7290/api/triage/stream", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "text/event-stream",
-        },
-        body: JSON.stringify({ serviceName, alertMessage }),
-      });
+      if (mode === "json") {
+        // 1. Fetch Structured JSON
+        const res = await fetch("http://localhost:5009/api/triage", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serviceName, alertMessage }),
+        });
 
-      if (!response.ok) throw new Error("Network response was not ok");
-      if (!response.body) throw new Error("ReadableStream not supported");
+        const data = await res.json();
+        setJsonResult(data);
+      } else {
+        // 2. Fetch Multi-Agent Stream (Server-Sent Events)
+        const res = await fetch("http://localhost:5009/api/triage/stream", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ serviceName, alertMessage }),
+        });
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder("utf-8");
+        if (!res.body) throw new Error("No response body");
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+        const reader = res.body.getReader();
+        const decoder = new TextDecoder("utf-8");
+        let buffer = "";
+        let doneReading = false;
 
-        const chunk = decoder.decode(value, { stream: true });
-        const lines = chunk.split("\n");
+        while (!doneReading) {
+          const { value, done } = await reader.read();
+          doneReading = done;
+          if (value) {
+            // Decode the network chunk and add it to our buffer
+            buffer += decoder.decode(value, { stream: true });
 
-        for (const line of lines) {
-          if (line.startsWith("data: ")) {
-            const dataStr = line.replace("data: ", "").trim();
+            // Split by the SSE double-newline delimiter
+            const parts = buffer.split("\n\n");
 
-            if (dataStr === "[DONE]") {
-              setIsGenerating(false);
+            // Keep the last (potentially incomplete) chunk in the buffer
+            buffer = parts.pop() || "";
 
-              // Add to history
-              if (serviceName.trim()) {
-                setHistory([
-                  {
-                    id: Date.now().toString(),
-                    title: `${serviceName} - Alert`,
-                  },
-                  ...history,
-                ]);
-              }
-              return;
-            }
+            for (const part of parts) {
+              if (part.startsWith("data: ")) {
+                const dataStr = part.replace("data: ", "").trim();
 
-            if (dataStr) {
-              try {
-                const parsed = JSON.parse(dataStr);
-                setReport((prev) => prev + parsed.text);
-              } catch (err) {
-                console.warn("Skipped partial chunk", dataStr);
+                if (dataStr === "[DONE]") {
+                  doneReading = true;
+                  break;
+                }
+
+                try {
+                  const parsed = JSON.parse(dataStr);
+                  if (parsed.text) {
+                    // Append the new text to the UI
+                    setStreamLog((prev) => prev + parsed.text);
+                  }
+                } catch (err) {
+                  console.warn("Failed to parse SSE JSON:", dataStr);
+                }
               }
             }
           }
         }
       }
     } catch (error) {
-      console.error("Failed to stream triage report:", error);
-      setReport(
-        (prev) => prev + "\n\n**Error:** Connection lost or timeout exceeded.",
+      console.error("Triage failed:", error);
+      setStreamLog(
+        (prev) => prev + "\n\n**[System Error]**: Connection failed.",
       );
     } finally {
-      setIsGenerating(false);
+      setLoading(false);
     }
   };
 
   return (
-    <div className="flex h-screen w-screen bg-white dark:bg-[#131313] text-gray-900 dark:text-gray-100 scrollbar-hide">
-      {/* Sidebar */}
-      <aside className="w-64 border-r border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-[#0a0a0a] flex flex-col scrollbar-hide">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <button className="w-full flex items-center gap-2 px-4 py-2.5 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-sm font-semibold">
-            <Plus size={18} />
-            New Report
+    <div className="max-w-5xl mx-auto p-6 space-y-8">
+      <div className="flex flex-col gap-2">
+        <h1 className="text-3xl font-bold tracking-tight">
+          System Triage Agent
+        </h1>
+        <p className="text-gray-500">
+          Autonomous SRE metrics gathering and incident resolution.
+        </p>
+      </div>
+
+      {/* Input Form */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-white p-6 rounded-xl border shadow-sm">
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Target Service</label>
+          <input
+            value={serviceName}
+            onChange={(e) => setServiceName(e.target.value)}
+            className="w-full p-2 border rounded-md"
+          />
+        </div>
+        <div className="space-y-2">
+          <label className="text-sm font-medium">Alert Message</label>
+          <input
+            value={alertMessage}
+            onChange={(e) => setAlertMessage(e.target.value)}
+            className="w-full p-2 border rounded-md"
+          />
+        </div>
+
+        <div className="col-span-full flex items-center gap-4 mt-2">
+          <select
+            value={mode}
+            onChange={(e) => setMode(e.target.value as "json" | "stream")}
+            className="p-2 border rounded-md bg-gray-50">
+            <option value="stream">Live Multi-Agent Stream</option>
+            <option value="json">Fast Structured JSON</option>
+          </select>
+
+          <button
+            onClick={runTriage}
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-md font-medium transition-colors disabled:opacity-50">
+            {loading ? "Agents are working..." : "Execute Triage"}
           </button>
         </div>
-
-        <div className="flex-1 overflow-y-auto p-4 scrollbar-hide">
-          <div className="space-y-2">
-            {history.length === 0 ? (
-              <p className="text-xs text-gray-500 dark:text-gray-500 p-4">
-                No history yet
-              </p>
-            ) : (
-              history.map((item) => (
-                <button
-                  key={item.id}
-                  className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-800 transition-colors text-sm truncate">
-                  {item.title}
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-      </aside>
-
-      {/* Main Content */}
-      <div className="flex-1 flex flex-col">
-        {/* Output Area */}
-        <div className="flex-1 overflow-y-auto p-8 flex flex-col items-center justify-start scrollbar-hide">
-          <div className="w-full max-w-2xl">
-            {report ? (
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h2 className="text-sm font-semibold text-gray-600 dark:text-gray-400">
-                      Service: {serviceName}
-                    </h2>
-                    <p className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                      Alert: {alertMessage.substring(0, 50)}
-                      {alertMessage.length > 50 ? "..." : ""}
-                    </p>
-                  </div>
-                  {report && (
-                    <button
-                      onClick={handleCopy}
-                      className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-xs font-medium transition-colors whitespace-nowrap">
-                      {copied ? (
-                        <>
-                          <Check size={14} />
-                          Copied
-                        </>
-                      ) : (
-                        <>
-                          <Copy size={14} />
-                          Copy report
-                        </>
-                      )}
-                    </button>
-                  )}
-                </div>
-                <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-lg p-6 whitespace-pre-wrap text-sm leading-relaxed max-h-96 overflow-y-auto scrollbar-hide">
-                  {report}
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-20">
-                <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-600 to-purple-500 dark:from-purple-400 dark:to-purple-300 bg-clip-text text-transparent">
-                  SRE Triage Agent
-                </h1>
-                <p className="text-gray-600 dark:text-gray-400 text-lg">
-                  Automatically analyze and resolve service incidents
-                </p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Input Area */}
-        <div className="border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-[#131313] p-8">
-          <form onSubmit={handleTriage} className="max-w-2xl mx-auto">
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  value={serviceName}
-                  onChange={(e) => setServiceName(e.target.value)}
-                  placeholder="Service name..."
-                  className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 scrollbar-hide"
-                  disabled={isGenerating}
-                />
-                <textarea
-                  value={alertMessage}
-                  onChange={(e) => setAlertMessage(e.target.value)}
-                  placeholder="Alert message..."
-                  className="px-4 py-3 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:ring-2 focus:ring-purple-500 dark:focus:ring-purple-500 text-sm placeholder:text-gray-500 dark:placeholder:text-gray-600 resize-none scrollbar-hide"
-                  rows={1}
-                  disabled={isGenerating}
-                />
-              </div>
-              <button
-                type="submit"
-                disabled={
-                  isGenerating || !serviceName.trim() || !alertMessage.trim()
-                }
-                className="w-full px-4 py-2.5 rounded-lg bg-purple-600 hover:bg-purple-700 disabled:bg-gray-300 dark:disabled:bg-gray-700 text-white dark:text-white font-medium transition-colors flex items-center justify-center gap-2 text-sm">
-                {isGenerating ? (
-                  <>
-                    <span className="animate-spin h-4 w-4 border-2 border-current border-t-transparent rounded-full" />
-                    Analyzing...
-                  </>
-                ) : (
-                  "Run Triage"
-                )}
-              </button>
-            </div>
-          </form>
-        </div>
       </div>
+
+      {/* Structured JSON Results Area */}
+      {mode === "json" && jsonResult && (
+        <div className="bg-white border rounded-xl p-6 shadow-sm space-y-4">
+          <div className="flex items-center gap-3">
+            <span
+              className={`px-3 py-1 rounded-full text-sm font-bold ${
+                jsonResult.severity === "Critical"
+                  ? "bg-red-100 text-red-700"
+                  : jsonResult.severity === "High"
+                    ? "bg-orange-100 text-orange-700"
+                    : "bg-yellow-100 text-yellow-700"
+              }`}>
+              {jsonResult.severity} SEVERITY
+            </span>
+            {jsonResult.requiresCodeChange && (
+              <span className="bg-purple-100 text-purple-700 px-3 py-1 rounded-full text-sm font-bold">
+                Code Fix Required
+              </span>
+            )}
+          </div>
+
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+              Root Cause
+            </h3>
+            <p className="text-lg font-medium mt-1">{jsonResult.rootCause}</p>
+          </div>
+          <div>
+            <h3 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">
+              Recommended Action
+            </h3>
+            <p className="text-lg font-medium mt-1">
+              {jsonResult.recommendedAction}
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Streaming Results Area */}
+      {mode === "stream" && (streamLog || loading) && (
+        <div className="bg-slate-950 text-slate-50 border rounded-xl p-6 shadow-inner font-mono text-sm h-[500px] overflow-y-auto whitespace-pre-wrap">
+          {streamLog || "Initializing SRE Agent..."}
+          {loading && <span className="animate-pulse ml-1">▋</span>}
+          <div ref={endOfLogRef} />
+        </div>
+      )}
     </div>
   );
 }
