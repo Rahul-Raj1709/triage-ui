@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+
 interface TriageResult {
   severity: "Critical" | "High" | "Warning" | "Low";
   rootCause: string;
@@ -30,6 +31,7 @@ export default function TriageDashboard() {
     try {
       if (mode === "json") {
         // 1. Fetch Structured JSON
+        // Matches TriageEndpoints.cs -> /api/triage
         const res = await fetch("http://localhost:5009/api/triage", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -40,10 +42,14 @@ export default function TriageDashboard() {
         setJsonResult(data);
       } else {
         // 2. Fetch Multi-Agent Stream (Server-Sent Events)
-        const res = await fetch("http://localhost:5009/api/triage/stream", {
+        // Matches ChatEndpoints.cs -> /api/chat/stream
+        const res = await fetch("http://localhost:5009/api/chat/stream", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ serviceName, alertMessage }),
+          // The backend ContinueChatRequest expects a single 'message' field
+          body: JSON.stringify({
+            message: `Triage this alert: ${serviceName} - ${alertMessage}`,
+          }),
         });
 
         if (!res.body) throw new Error("No response body");
