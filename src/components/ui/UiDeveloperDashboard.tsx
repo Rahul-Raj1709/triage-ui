@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { Copy, Check } from "lucide-react";
+import { Copy, Check, User, Bot, RotateCcw } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
-// --- NEW: Isolated Code Block Component ---
+// --- Isolated Code Block Component ---
 const CodeBlock = ({ code, language }: { code: string; language: string }) => {
   const [copied, setCopied] = useState(false);
 
@@ -12,24 +13,22 @@ const CodeBlock = ({ code, language }: { code: string; language: string }) => {
   };
 
   return (
-    <div className="my-4 rounded-lg overflow-hidden border border-gray-700 bg-[#141414] shadow-md">
-      {/* Code Block Header */}
-      <div className="flex items-center justify-between px-4 py-2 bg-[#2d2d2d] border-b border-gray-700">
-        <span className="text-xs font-semibold text-gray-400 lowercase">
+    <div className="my-4 rounded-xl overflow-hidden border border-gray-700 bg-[#141414] shadow-lg">
+      <div className="flex items-center justify-between px-4 py-2 bg-[#252526] border-b border-gray-700">
+        <span className="text-xs font-semibold text-gray-400 lowercase tracking-wider">
           {language || "code"}
         </span>
         <button
           onClick={handleCopy}
           className="flex items-center gap-1.5 text-xs text-gray-400 hover:text-white transition-colors">
           {copied ? (
-            <Check className="w-3.5 h-3.5 text-green-400" />
+            <Check className="w-4 h-4 text-green-400" />
           ) : (
-            <Copy className="w-3.5 h-3.5" />
+            <Copy className="w-4 h-4" />
           )}
-          {copied ? "Copied!" : "Copy Code"}
+          {copied ? "Copied!" : "Copy"}
         </button>
       </div>
-      {/* Code Content */}
       <div className="p-4 overflow-x-auto text-sm text-blue-300 font-mono whitespace-pre text-left">
         {code}
       </div>
@@ -37,42 +36,72 @@ const CodeBlock = ({ code, language }: { code: string; language: string }) => {
   );
 };
 
+// --- Chat Message Type ---
+interface ChatMessage {
+  id: string;
+  role: "user" | "agent";
+  content: string;
+}
+
 export default function UiDeveloperDashboard() {
   const [problemDescription, setProblemDescription] = useState("");
   const [workspacePath, setWorkspacePath] = useState("");
   const [targetFileToRead, setTargetFileToRead] = useState("");
 
-  const [codeOutput, setCodeOutput] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false);
+  // Chat Continuity State
+  const [conversationId, setConversationId] = useState<string | null>(null);
+  const [followUpMessage, setFollowUpMessage] = useState("");
 
-  // State for the global "Copy All" button
-  const [copiedAll, setCopiedAll] = useState(false);
+  // New Chat Array State
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [currentStream, setCurrentStream] = useState("");
+  const [isGenerating, setIsGenerating] = useState(false);
 
   const endOfLogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     endOfLogRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [codeOutput]);
+  }, [messages, currentStream]);
 
-  const handleCopyAll = async () => {
-    await navigator.clipboard.writeText(codeOutput);
-    setCopiedAll(true);
-    setTimeout(() => setCopiedAll(false), 2000);
+  // Initialize a new DB session
+  const initSession = async () => {
+    const res = await fetch("http://localhost:5009/api/chat/init", {
+      method: "POST",
+    });
+    const data = await res.json();
+    return data.conversationId;
   };
 
-  const handleGenerateCode = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!problemDescription.trim()) return;
+  const executeChat = async (isInitial: boolean) => {
+    if (isInitial && !problemDescription.trim()) return;
 
     setIsGenerating(true);
-    setCodeOutput("");
+    let currentConversationId = conversationId;
+
+    const messageText = isInitial ? problemDescription : followUpMessage;
+
+    if (isInitial || !currentConversationId) {
+      setMessages([]);
+      currentConversationId = await initSession();
+      setConversationId(currentConversationId);
+    } else {
+      setFollowUpMessage(""); // Clear input box for follow-ups
+    }
+
+    // Add user message to UI instantly
+    setMessages((prev) => [
+      ...prev,
+      { id: Date.now().toString(), role: "user", content: messageText },
+    ]);
+    setCurrentStream(""); // Reset stream buffer
 
     try {
       const res = await fetch("http://localhost:5009/api/ui-agent/stream", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          problemDescription,
+          conversationId: currentConversationId,
+          problemDescription: messageText,
           workspacePath: workspacePath || null,
           targetFileToRead: targetFileToRead || null,
         }),
@@ -82,7 +111,10 @@ export default function UiDeveloperDashboard() {
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder("utf-8");
-      let buffer = "";
+
+      // FIX: Separate network buffer from text accumulator
+      let sseBuffer = "";
+      let fullText = "";
       let doneReading = false;
 
       while (!doneReading) {
@@ -90,9 +122,10 @@ export default function UiDeveloperDashboard() {
         doneReading = done;
 
         if (value) {
-          buffer += decoder.decode(value, { stream: true });
-          const parts = buffer.split("\n\n");
-          buffer = parts.pop() || "";
+          sseBuffer += decoder.decode(value, { stream: true });
+          const parts = sseBuffer.split("\n\n");
+
+          sseBuffer = parts.pop() || ""; // Keep incomplete chunk in network buffer
 
           for (const part of parts) {
             if (part.startsWith("data: ")) {
@@ -106,7 +139,9 @@ export default function UiDeveloperDashboard() {
               try {
                 const parsed = JSON.parse(dataStr);
                 if (parsed.text) {
-                  setCodeOutput((prev) => prev + parsed.text);
+                  // Safely accumulate the actual markdown text
+                  fullText += parsed.text;
+                  setCurrentStream(fullText);
                 }
               } catch (err) {
                 console.warn("Failed to parse SSE JSON:", dataStr);
@@ -115,153 +150,268 @@ export default function UiDeveloperDashboard() {
           }
         }
       }
+
+      // Save to permanent array only if we actually got text
+      if (fullText.trim()) {
+        setMessages((prev) => [
+          ...prev,
+          { id: Date.now().toString(), role: "agent", content: fullText },
+        ]);
+      }
+      setCurrentStream("");
     } catch (error) {
       console.error("Agent failed:", error);
-      setCodeOutput("Error: Failed to connect to the UI Agent backend.");
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          role: "agent",
+          content:
+            "**[System Error]**: Failed to connect to the UI Agent backend.",
+        },
+      ]);
     } finally {
       setIsGenerating(false);
     }
   };
 
-  // --- NEW: Custom Markdown Parser ---
-  const renderFormattedOutput = (text: string) => {
-    if (!text) return null;
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && followUpMessage.trim() && !isGenerating) {
+      executeChat(false);
+    }
+  };
 
-    // Split the text using markdown code blocks as the delimiter
-    const parts = text.split(/(```[\s\S]*?```)/g);
-
-    return parts.map((part, index) => {
-      // If the part is a code block
-      if (part.startsWith("```") && part.endsWith("```")) {
-        // Strip the backticks
-        const content = part.slice(3, -3);
-        // The first line is usually the language (e.g., "tsx" or "csharp")
-        const firstNewline = content.indexOf("\n");
-
-        // If there's no newline, it might be an empty block or inline
-        if (firstNewline === -1) return <span key={index}>{part}</span>;
-
-        const language = content.substring(0, firstNewline).trim();
-        const code = content.substring(firstNewline + 1).trim();
-
-        return <CodeBlock key={index} code={code} language={language} />;
-      }
-
-      // If it's normal text, render it directly
-      return <span key={index}>{part}</span>;
-    });
+  // Helper to render Markdown components with custom Tailwind styling
+  const markdownComponents = {
+    h1: ({ node, ...props }: any) => (
+      <h1 className="text-2xl font-bold mt-6 mb-4 text-white" {...props} />
+    ),
+    h2: ({ node, ...props }: any) => (
+      <h2 className="text-xl font-bold mt-6 mb-3 text-white" {...props} />
+    ),
+    h3: ({ node, ...props }: any) => (
+      <h3 className="text-lg font-bold mt-5 mb-2 text-white" {...props} />
+    ),
+    p: ({ node, ...props }: any) => (
+      <p className="mb-4 text-gray-300 leading-relaxed last:mb-0" {...props} />
+    ),
+    ul: ({ node, ...props }: any) => (
+      <ul className="list-disc pl-6 mb-4 space-y-2 text-gray-300" {...props} />
+    ),
+    ol: ({ node, ...props }: any) => (
+      <ol
+        className="list-decimal pl-6 mb-4 space-y-2 text-gray-300"
+        {...props}
+      />
+    ),
+    li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
+    strong: ({ node, ...props }: any) => (
+      <strong className="font-semibold text-gray-100" {...props} />
+    ),
+    code({ node, inline, className, children, ...props }: any) {
+      const match = /language-(\w+)/.exec(className || "");
+      return !inline && match ? (
+        <CodeBlock
+          language={match[1]}
+          code={String(children).replace(/\n$/, "")}
+        />
+      ) : (
+        <code
+          className="bg-[#141414] px-1.5 py-0.5 rounded-md text-blue-300 font-mono text-sm border border-gray-700"
+          {...props}>
+          {children}
+        </code>
+      );
+    },
   };
 
   return (
-    <div className="max-w-6xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col">
+    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col">
+      {/* Header */}
       <div className="flex flex-col gap-2 shrink-0">
-        <h1 className="text-3xl font-bold tracking-tight text-blue-600">
+        <h1 className="text-3xl font-bold tracking-tight text-blue-500">
           UI Developer Agent
         </h1>
-        <p className="text-gray-500">
+        <p className="text-gray-400">
           Autonomous React/TS component generation with Workspace context.
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
         {/* Left Column: Input Form */}
-        <form
-          onSubmit={handleGenerateCode}
-          className="lg:col-span-1 flex flex-col gap-4 bg-white p-5 rounded-xl border shadow-sm h-fit">
+        <div className="lg:col-span-1 flex flex-col gap-5 bg-[#1e1e1e] p-6 rounded-2xl border border-gray-800 shadow-sm h-fit">
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">
-              1. Requirement (Required)
+            <label className="text-sm font-semibold text-gray-300">
+              1. Initial Requirement
             </label>
             <textarea
               value={problemDescription}
               onChange={(e) => setProblemDescription(e.target.value)}
-              placeholder="e.g., Create a responsive pricing card component using Tailwind..."
-              className="w-full px-3 py-2 border rounded-md text-sm min-h-[120px] resize-y focus:ring-2 focus:ring-blue-500 outline-none"
-              disabled={isGenerating}
+              placeholder="Create a pricing card component using Tailwind..."
+              className="w-full px-4 py-3 bg-[#141414] text-gray-200 border border-gray-700 rounded-xl text-sm min-h-[140px] resize-y focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none disabled:opacity-50"
+              disabled={isGenerating || conversationId !== null}
               required
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">
-              2. Workspace Path (Optional)
+            <label className="text-sm font-semibold text-gray-300">
+              2. Workspace Path
             </label>
             <input
               type="text"
               value={workspacePath}
               onChange={(e) => setWorkspacePath(e.target.value)}
-              placeholder="C:\Code\MyReactApp\src\components"
-              className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              disabled={isGenerating}
+              placeholder="C:\Code\MyReactApp"
+              className="w-full px-4 py-2.5 bg-[#141414] text-gray-200 border border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+              disabled={isGenerating || conversationId !== null}
             />
           </div>
 
           <div className="space-y-2">
-            <label className="text-sm font-semibold text-gray-700">
-              3. Target File to Read (Optional)
+            <label className="text-sm font-semibold text-gray-300">
+              3. Target File
             </label>
             <input
               type="text"
               value={targetFileToRead}
               onChange={(e) => setTargetFileToRead(e.target.value)}
-              placeholder="C:\Code\MyReactApp\src\App.tsx"
-              className="w-full px-3 py-2 border rounded-md text-sm focus:ring-2 focus:ring-blue-500 outline-none"
-              disabled={isGenerating}
+              placeholder="src/App.tsx"
+              className="w-full px-4 py-2.5 bg-[#141414] text-gray-200 border border-gray-700 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none disabled:opacity-50"
+              disabled={isGenerating || conversationId !== null}
             />
           </div>
 
-          <button
-            type="submit"
-            disabled={isGenerating || !problemDescription.trim()}
-            className="mt-2 w-full px-4 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 text-white font-medium transition-colors flex items-center justify-center gap-2 text-sm">
-            {isGenerating ? (
-              <>
-                <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />{" "}
-                Thinking...
-              </>
-            ) : (
-              "Generate Code"
-            )}
-          </button>
-        </form>
-
-        {/* Right Column: Code Output */}
-        <div className="lg:col-span-2 flex flex-col bg-[#1e1e1e] rounded-xl border shadow-sm overflow-hidden min-h-0">
-          <div className="flex items-center justify-between px-4 py-2 border-b border-gray-700 bg-[#2d2d2d]">
-            <span className="text-sm font-medium text-gray-300">
-              Agent Output
-            </span>
+          <div className="flex flex-col gap-3 mt-4">
             <button
-              onClick={handleCopyAll}
-              disabled={!codeOutput}
-              className="text-gray-400 hover:text-white transition-colors disabled:opacity-50 flex items-center gap-1.5 text-xs bg-gray-800 px-2 py-1 rounded-md border border-gray-600"
-              title="Copy Entire Response">
-              {copiedAll ? (
-                <Check className="w-3.5 h-3.5 text-green-400" />
+              type="button"
+              onClick={() => executeChat(true)}
+              disabled={
+                isGenerating ||
+                !problemDescription.trim() ||
+                conversationId !== null
+              }
+              className="w-full px-4 py-3 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:bg-gray-700 text-white font-semibold transition-colors flex items-center justify-center gap-2 text-sm shadow-lg">
+              {isGenerating && !conversationId ? (
+                <>
+                  <span className="animate-spin h-4 w-4 border-2 border-white border-t-transparent rounded-full" />{" "}
+                  Initializing...
+                </>
               ) : (
-                <Copy className="w-3.5 h-3.5" />
+                "Start Session"
               )}
-              {copiedAll ? "Copied All" : "Copy All"}
             </button>
+            {conversationId && (
+              <button
+                type="button"
+                onClick={() => {
+                  setConversationId(null);
+                  setMessages([]);
+                  setCurrentStream("");
+                }}
+                disabled={isGenerating}
+                className="w-full px-4 py-3 rounded-xl bg-gray-800 hover:bg-gray-700 text-gray-300 font-medium transition-colors text-sm flex items-center justify-center gap-2 border border-gray-700">
+                <RotateCcw size={16} /> Reset Context
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Modern Chat UI */}
+        <div className="lg:col-span-3 flex flex-col bg-[#141414] rounded-2xl border border-gray-800 shadow-xl overflow-hidden min-h-0 relative">
+          {/* Top Bar */}
+          <div className="flex items-center px-6 py-4 border-b border-gray-800 bg-[#1a1a1a] shrink-0 z-10">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                <Bot className="w-5 h-5 text-blue-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-200">UiAgent</h3>
+                <p className="text-xs text-gray-500">React & Tailwind Expert</p>
+              </div>
+            </div>
           </div>
 
-          {/* Output Area */}
-          <div className="flex-1 p-4 overflow-y-auto text-sm text-gray-300 font-sans whitespace-pre-wrap leading-relaxed">
-            {codeOutput ? (
-              <>
-                {renderFormattedOutput(codeOutput)}
-                {isGenerating && (
-                  <span className="animate-pulse ml-1 text-blue-400">▋</span>
-                )}
-              </>
-            ) : (
-              <span className="text-gray-500 italic">
-                Awaiting instructions... Provide a workspace path to allow the
-                agent to analyze your local files.
-              </span>
+          {/* Messages Area */}
+          <div className="flex-1 p-6 overflow-y-auto space-y-8 bg-[#141414]">
+            {messages.length === 0 && !isGenerating && (
+              <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-4">
+                <Bot size={56} className="opacity-20" />
+                <p className="text-sm">
+                  Awaiting instructions... Start a session from the left panel.
+                </p>
+              </div>
+            )}
+
+            {/* Render Permanent Messages */}
+            {messages.map((msg) => (
+              <div
+                key={msg.id}
+                className={`flex gap-4 ${msg.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
+                <div
+                  className={`w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center mt-1 shadow-md ${msg.role === "user" ? "bg-blue-600" : "bg-purple-600"}`}>
+                  {msg.role === "user" ? (
+                    <User size={16} className="text-white" />
+                  ) : (
+                    <Bot size={16} className="text-white" />
+                  )}
+                </div>
+                <div
+                  className={`max-w-[85%] rounded-2xl px-6 py-4 ${msg.role === "user" ? "bg-blue-600 text-white" : "bg-[#1e1e1e] border border-gray-800"}`}>
+                  {msg.role === "user" ? (
+                    <p className="whitespace-pre-wrap text-sm">{msg.content}</p>
+                  ) : (
+                    <ReactMarkdown components={markdownComponents}>
+                      {msg.content}
+                    </ReactMarkdown>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* Render Live Streaming Message */}
+            {isGenerating && currentStream && (
+              <div className="flex gap-4 flex-row">
+                <div className="w-8 h-8 flex-shrink-0 rounded-full flex items-center justify-center mt-1 shadow-md bg-purple-600">
+                  <Bot size={16} className="text-white" />
+                </div>
+                <div className="max-w-[85%] rounded-2xl px-6 py-4 bg-[#1e1e1e] border border-gray-800">
+                  <ReactMarkdown components={markdownComponents}>
+                    {currentStream}
+                  </ReactMarkdown>
+                  <span className="animate-pulse ml-1 text-blue-400 font-bold">
+                    ▋
+                  </span>
+                </div>
+              </div>
             )}
             <div ref={endOfLogRef} />
           </div>
+
+          {/* Follow-up Chat Input */}
+          {conversationId && (
+            <div className="p-4 bg-[#1a1a1a] border-t border-gray-800 shrink-0">
+              <div className="max-w-4xl mx-auto flex gap-3 relative">
+                <input
+                  type="text"
+                  value={followUpMessage}
+                  onChange={(e) => setFollowUpMessage(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask a follow-up question or request changes..."
+                  disabled={isGenerating || !conversationId}
+                  className="flex-grow p-4 rounded-xl bg-[#252526] text-gray-100 border border-gray-700 focus:outline-none focus:border-blue-500 placeholder-gray-500 disabled:opacity-50 text-sm shadow-inner transition-colors"
+                />
+                <button
+                  onClick={() => executeChat(false)}
+                  disabled={
+                    isGenerating || !conversationId || !followUpMessage.trim()
+                  }
+                  className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-semibold transition-colors disabled:opacity-50 text-sm flex items-center gap-2 shadow-lg">
+                  {isGenerating ? "Working..." : "Send"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>
