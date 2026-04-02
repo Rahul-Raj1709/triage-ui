@@ -97,7 +97,7 @@ export default function TriageDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col bg-white">
+    <div className="max-w-7xl mx-auto p-6 space-y-6 h-full flex flex-col bg-white">
       {/* Header */}
       <div className="flex flex-col gap-2 shrink-0">
         <h1 className="text-3xl font-bold tracking-tight text-black">
@@ -136,43 +136,12 @@ export default function TriageDashboard() {
           jsonResult={jsonResult}
           endOfLogRef={endOfLogRef}
           TriageResultDisplay={TriageResultDisplay}
+          followUpMessage={chat.followUpMessage}
+          onFollowUpChange={chat.setFollowUpMessage}
+          onFollowUpSubmit={() => executeChat(false)}
+          hasConversation={chat.conversationId !== null}
         />
       </div>
-
-      {/* Follow-up Chat Input (Only visible in stream mode) */}
-      {mode === "stream" && chat.conversationId && (
-        <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-2xl px-4">
-          <div className="flex gap-3">
-            <input
-              type="text"
-              value={chat.followUpMessage}
-              onChange={(e) => chat.setFollowUpMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (
-                  e.key === "Enter" &&
-                  chat.followUpMessage.trim() &&
-                  !chat.isLoading
-                ) {
-                  executeChat(false);
-                }
-              }}
-              placeholder="Ask a follow-up question..."
-              disabled={chat.isLoading || !chat.conversationId}
-              className="flex-grow p-4 rounded-xl bg-[#252526] text-gray-100 border border-gray-700 focus:outline-none focus:border-purple-500 placeholder-gray-500 disabled:opacity-50 text-sm shadow-lg transition-colors"
-            />
-            <button
-              onClick={() => executeChat(false)}
-              disabled={
-                chat.isLoading ||
-                !chat.conversationId ||
-                !chat.followUpMessage.trim()
-              }
-              className="bg-purple-600 hover:bg-purple-500 text-white px-8 py-4 rounded-xl font-semibold transition-colors disabled:opacity-50 text-sm flex items-center gap-2 shadow-lg">
-              {chat.isLoading ? "Thinking..." : "Send"}
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
