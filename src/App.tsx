@@ -1,6 +1,6 @@
 import { useState } from "react";
-import TriageDashboard from "@/components/ui/TriageDashboard";
-import UiDeveloperDashboard from "@/components/ui/UiDeveloperDashboard";
+import { TriageDashboard } from "@/components/dashboards/triage";
+import { UiDeveloperDashboard } from "@/components/dashboards/ui-developer";
 
 function App() {
   const [activeTab, setActiveTab] = useState<"sre" | "ui">("ui");
