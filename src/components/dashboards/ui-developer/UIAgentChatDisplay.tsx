@@ -32,26 +32,26 @@ export function UIAgentChatDisplay({
   };
 
   return (
-    <div className="lg:col-span-3 flex flex-col bg-[#141414] rounded-2xl border border-gray-800 shadow-xl overflow-hidden min-h-0 relative">
+    <div className="lg:col-span-3 flex flex-col bg-white rounded border border-gray-300 overflow-hidden min-h-0 relative">
       {/* Top Bar */}
-      <div className="flex items-center px-6 py-4 border-b border-gray-800 bg-[#1a1a1a] shrink-0 z-10">
+      <div className="flex items-center px-6 py-4 border-b border-gray-300 bg-gray-50 shrink-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-blue-500/10 flex items-center justify-center">
-            <Bot className="w-5 h-5 text-blue-500" />
+          <div className="w-8 h-8 rounded flex items-center justify-center bg-black">
+            <Bot className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-200">UiAgent</h3>
-            <p className="text-xs text-gray-500">React & Tailwind Expert</p>
+            <h3 className="text-sm font-semibold text-black">UiAgent</h3>
+            <p className="text-xs text-gray-600">React & Tailwind Expert</p>
           </div>
         </div>
       </div>
 
       {/* Messages Area */}
-      <div className="flex-1 p-6 overflow-y-auto space-y-8 bg-[#141414]">
+      <div className="flex-1 p-6 overflow-y-auto space-y-8 bg-white">
         {messages.length === 0 && !isGenerating && (
-          <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-4">
-            <Bot size={56} className="opacity-20" />
-            <p className="text-sm">
+          <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
+            <Bot size={56} className="opacity-30" />
+            <p className="text-sm text-gray-600">
               Awaiting instructions... Start a session from the left panel.
             </p>
           </div>
@@ -64,14 +64,14 @@ export function UIAgentChatDisplay({
 
         {/* Render Live Streaming Message */}
         {isGenerating && currentStream && (
-          <StreamingMessage content={currentStream} agentColor="blue" />
+          <StreamingMessage content={currentStream} agentColor="black" />
         )}
         <div ref={endOfLogRef} />
       </div>
 
       {/* Follow-up Chat Input */}
       {hasConversation && (
-        <div className="p-4 bg-[#1a1a1a] border-t border-gray-800 shrink-0">
+        <div className="p-4 bg-gray-50 border-t border-gray-300 shrink-0">
           <div className="max-w-4xl mx-auto flex gap-3 relative">
             <input
               type="text"
@@ -80,14 +80,14 @@ export function UIAgentChatDisplay({
               onKeyDown={handleKeyDown}
               placeholder="Ask a follow-up question or request changes..."
               disabled={isGenerating || !hasConversation}
-              className="flex-grow p-4 rounded-xl bg-[#252526] text-gray-100 border border-gray-700 focus:outline-none focus:border-blue-500 placeholder-gray-500 disabled:opacity-50 text-sm shadow-inner transition-colors"
+              className="flex-grow p-4 rounded bg-white text-black border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black placeholder-gray-500 disabled:opacity-50 text-sm transition-colors"
             />
             <button
               onClick={onFollowUpSubmit}
               disabled={
                 isGenerating || !hasConversation || !followUpMessage.trim()
               }
-              className="bg-blue-600 hover:bg-blue-500 text-white px-8 py-4 rounded-xl font-semibold transition-colors disabled:opacity-50 text-sm flex items-center gap-2 shadow-lg">
+              className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded font-semibold transition-colors disabled:bg-gray-300 disabled:text-gray-500 text-sm flex items-center gap-2">
               {isGenerating ? "Working..." : "Send"}
             </button>
           </div>

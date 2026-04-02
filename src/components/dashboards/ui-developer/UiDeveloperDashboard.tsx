@@ -82,13 +82,13 @@ export default function UiDeveloperDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col">
+    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col bg-white">
       {/* Header */}
       <div className="flex flex-col gap-2 shrink-0">
-        <h1 className="text-3xl font-bold tracking-tight text-blue-500">
+        <h1 className="text-3xl font-bold tracking-tight text-black">
           UI Developer Agent
         </h1>
-        <p className="text-gray-400">
+        <p className="text-gray-600">
           Autonomous React/TS component generation with Workspace context.
         </p>
       </div>

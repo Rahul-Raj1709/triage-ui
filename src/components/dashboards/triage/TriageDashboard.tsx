@@ -97,13 +97,13 @@ export default function TriageDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col">
+    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col bg-white">
       {/* Header */}
       <div className="flex flex-col gap-2 shrink-0">
-        <h1 className="text-3xl font-bold tracking-tight text-purple-500">
+        <h1 className="text-3xl font-bold tracking-tight text-black">
           System Triage Agent
         </h1>
-        <p className="text-gray-400">
+        <p className="text-gray-600">
           Autonomous SRE metrics gathering and incident resolution.
         </p>
       </div>
