@@ -97,9 +97,9 @@ export default function TriageDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6 h-full flex flex-col bg-white">
+    <div className="w-full h-full flex flex-col bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col gap-2 shrink-0">
+      <div className="flex flex-col gap-2 px-6 py-6 shrink-0 border-b border-gray-300">
         <h1 className="text-3xl font-bold tracking-tight text-black">
           System Triage Agent
         </h1>
@@ -108,39 +108,41 @@ export default function TriageDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
-        {/* Left Column: Input Form */}
-        <TriageInputForm
-          serviceName={serviceName}
-          alertMessage={alertMessage}
-          mode={mode}
-          isLoading={chat.isLoading}
-          hasConversation={chat.conversationId !== null}
-          onServiceNameChange={(value) =>
-            setServiceName(value as typeof serviceName)
-          }
-          onAlertMessageChange={(value) =>
-            setAlertMessage(value as typeof alertMessage)
-          }
-          onModeChange={setMode}
-          onStartTriage={() => executeChat(true)}
-          onReset={handleReset}
-        />
+      <div className="flex-1 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full p-6">
+          {/* Left Column: Input Form */}
+          <TriageInputForm
+            serviceName={serviceName}
+            alertMessage={alertMessage}
+            mode={mode}
+            isLoading={chat.isLoading}
+            hasConversation={chat.conversationId !== null}
+            onServiceNameChange={(value) =>
+              setServiceName(value as typeof serviceName)
+            }
+            onAlertMessageChange={(value) =>
+              setAlertMessage(value as typeof alertMessage)
+            }
+            onModeChange={setMode}
+            onStartTriage={() => executeChat(true)}
+            onReset={handleReset}
+          />
 
-        {/* Right Column: Chat/Results UI */}
-        <TriageChatDisplay
-          mode={mode}
-          messages={chat.messages}
-          currentStream={chat.currentStream}
-          isLoading={chat.isLoading}
-          jsonResult={jsonResult}
-          endOfLogRef={endOfLogRef}
-          TriageResultDisplay={TriageResultDisplay}
-          followUpMessage={chat.followUpMessage}
-          onFollowUpChange={chat.setFollowUpMessage}
-          onFollowUpSubmit={() => executeChat(false)}
-          hasConversation={chat.conversationId !== null}
-        />
+          {/* Right Column: Chat/Results UI */}
+          <TriageChatDisplay
+            mode={mode}
+            messages={chat.messages}
+            currentStream={chat.currentStream}
+            isLoading={chat.isLoading}
+            jsonResult={jsonResult}
+            endOfLogRef={endOfLogRef}
+            TriageResultDisplay={TriageResultDisplay}
+            followUpMessage={chat.followUpMessage}
+            onFollowUpChange={chat.setFollowUpMessage}
+            onFollowUpSubmit={() => executeChat(false)}
+            hasConversation={chat.conversationId !== null}
+          />
+        </div>
       </div>
     </div>
   );

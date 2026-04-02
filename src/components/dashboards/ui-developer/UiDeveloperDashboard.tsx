@@ -82,9 +82,9 @@ export default function UiDeveloperDashboard() {
   };
 
   return (
-    <div className="max-w-7xl mx-auto p-6 space-y-6 pb-24 h-full flex flex-col bg-white">
+    <div className="w-full h-full flex flex-col bg-white overflow-hidden">
       {/* Header */}
-      <div className="flex flex-col gap-2 shrink-0">
+      <div className="flex flex-col gap-2 px-6 py-6 shrink-0 border-b border-gray-300">
         <h1 className="text-3xl font-bold tracking-tight text-black">
           UI Developer Agent
         </h1>
@@ -93,32 +93,34 @@ export default function UiDeveloperDashboard() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 flex-1 min-h-0">
-        {/* Left Column: Input Form */}
-        <UIAgentInputForm
-          problemDescription={problemDescription}
-          workspacePath={workspacePath}
-          targetFileToRead={targetFileToRead}
-          isGenerating={chat.isLoading}
-          hasConversation={chat.conversationId !== null}
-          onProblemDescriptionChange={setProblemDescription}
-          onWorkspacePathChange={setWorkspacePath}
-          onTargetFileChange={setTargetFileToRead}
-          onStartSession={() => executeChat(true)}
-          onResetContext={handleReset}
-        />
+      <div className="flex-1 overflow-hidden">
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 h-full p-6">
+          {/* Left Column: Input Form */}
+          <UIAgentInputForm
+            problemDescription={problemDescription}
+            workspacePath={workspacePath}
+            targetFileToRead={targetFileToRead}
+            isGenerating={chat.isLoading}
+            hasConversation={chat.conversationId !== null}
+            onProblemDescriptionChange={setProblemDescription}
+            onWorkspacePathChange={setWorkspacePath}
+            onTargetFileChange={setTargetFileToRead}
+            onStartSession={() => executeChat(true)}
+            onResetContext={handleReset}
+          />
 
-        {/* Right Column: Chat Display */}
-        <UIAgentChatDisplay
-          messages={chat.messages}
-          currentStream={chat.currentStream}
-          isGenerating={chat.isLoading}
-          endOfLogRef={endOfLogRef}
-          onFollowUpChange={chat.setFollowUpMessage}
-          onFollowUpSubmit={() => executeChat(false)}
-          followUpMessage={chat.followUpMessage}
-          hasConversation={chat.conversationId !== null}
-        />
+          {/* Right Column: Chat Display */}
+          <UIAgentChatDisplay
+            messages={chat.messages}
+            currentStream={chat.currentStream}
+            isGenerating={chat.isLoading}
+            endOfLogRef={endOfLogRef}
+            onFollowUpChange={chat.setFollowUpMessage}
+            onFollowUpSubmit={() => executeChat(false)}
+            followUpMessage={chat.followUpMessage}
+            hasConversation={chat.conversationId !== null}
+          />
+        </div>
       </div>
     </div>
   );

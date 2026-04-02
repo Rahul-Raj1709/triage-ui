@@ -1,6 +1,7 @@
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle, ArrowDown } from "lucide-react";
 import type { ChatMessage, TriageResult } from "@/types/chat";
 import type { RefObject } from "react";
+import { useState, useRef, useEffect } from "react";
 import { ChatMessageComponent } from "@/components/shared/ChatMessage";
 import { StreamingMessage } from "@/components/shared/StreamingMessage";
 
@@ -31,14 +32,35 @@ export function TriageChatDisplay({
   onFollowUpSubmit,
   hasConversation = false,
 }: TriageChatDisplayProps) {
+  const [showGoToBottom, setShowGoToBottom] = useState(false);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Enter" && followUpMessage.trim() && !isLoading) {
       onFollowUpSubmit?.();
     }
   };
 
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop, scrollHeight, clientHeight } =
+        scrollContainerRef.current;
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+      setShowGoToBottom(!isNearBottom);
+    }
+  };
+
+  const scrollToBottom = () => {
+    endOfLogRef.current?.scrollIntoView({ behavior: "smooth" });
+    setShowGoToBottom(false);
+  };
+
+  useEffect(() => {
+    handleScroll();
+  }, [messages, currentStream]);
+
   return (
-    <div className="lg:col-span-3 flex flex-col bg-white rounded border border-gray-300 overflow-hidden min-h-0 relative">
+    <div className="lg:col-span-3 flex flex-col bg-white rounded border border-gray-300 overflow-hidden h-full relative">
       {/* Top Bar */}
       <div className="flex items-center px-6 py-4 border-b border-gray-300 bg-gray-50 shrink-0 z-10">
         <div className="flex items-center gap-3">
@@ -56,59 +78,76 @@ export function TriageChatDisplay({
 
       {/* JSON Mode Display */}
       {mode === "json" && jsonResult && (
-        <div className="flex-1 p-8 overflow-y-auto">
+        <div
+          className="flex-1 p-8 overflow-y-auto scrollbar-hide"
+          ref={scrollContainerRef}
+          onScroll={handleScroll}>
           <TriageResultDisplay {...jsonResult} />
         </div>
       )}
 
       {/* Stream Mode Display */}
       {mode === "stream" && (
-        <div className="flex-1 p-6 overflow-y-auto space-y-8 bg-white">
-          {messages.length === 0 && !isLoading && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
-              <AlertTriangle size={56} className="opacity-30" />
-              <p className="text-sm text-gray-600">
-                Awaiting alert... Click 'Start Triage' to begin analysis.
-              </p>
+        <>
+          <div
+            className="flex-1 p-6 overflow-y-auto space-y-8 bg-white scrollbar-hide"
+            ref={scrollContainerRef}
+            onScroll={handleScroll}>
+            {messages.length === 0 && !isLoading && (
+              <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
+                <AlertTriangle size={56} className="opacity-30" />
+                <p className="text-sm text-gray-600">
+                  Awaiting alert... Click 'Start Triage' to begin analysis.
+                </p>
+              </div>
+            )}
+
+            {/* Render Permanent Messages */}
+            {messages.map((msg) => (
+              <ChatMessageComponent key={msg.id} message={msg} />
+            ))}
+
+            {/* Render Live Streaming Message */}
+            {isLoading && currentStream && (
+              <StreamingMessage content={currentStream} agentColor="black" />
+            )}
+            <div ref={endOfLogRef} />
+          </div>
+
+          {/* Go to Bottom Button */}
+          {showGoToBottom && (
+            <button
+              onClick={scrollToBottom}
+              className="absolute bottom-24 right-6 bg-black text-white p-3 rounded-full hover:bg-gray-800 transition-colors shadow-lg z-20 flex items-center justify-center">
+              <ArrowDown size={20} />
+            </button>
+          )}
+
+          {/* Follow-up Chat Input */}
+          {hasConversation && (
+            <div className="p-4 bg-gray-50 border-t border-gray-300 shrink-0">
+              <div className="flex gap-3 relative">
+                <input
+                  type="text"
+                  value={followUpMessage}
+                  onChange={(e) => onFollowUpChange?.(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Ask a follow-up question..."
+                  disabled={isLoading || !hasConversation}
+                  className="flex-grow p-4 rounded bg-white text-black border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black placeholder-gray-500 disabled:opacity-50 text-sm transition-colors"
+                />
+                <button
+                  onClick={onFollowUpSubmit}
+                  disabled={
+                    isLoading || !hasConversation || !followUpMessage.trim()
+                  }
+                  className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded font-semibold transition-colors disabled:bg-gray-300 disabled:text-gray-500 text-sm flex items-center gap-2 shrink-0">
+                  {isLoading ? "Thinking..." : "Send"}
+                </button>
+              </div>
             </div>
           )}
-
-          {/* Render Permanent Messages */}
-          {messages.map((msg) => (
-            <ChatMessageComponent key={msg.id} message={msg} />
-          ))}
-
-          {/* Render Live Streaming Message */}
-          {isLoading && currentStream && (
-            <StreamingMessage content={currentStream} agentColor="black" />
-          )}
-          <div ref={endOfLogRef} />
-        </div>
-      )}
-
-      {/* Follow-up Chat Input */}
-      {mode === "stream" && hasConversation && (
-        <div className="p-4 bg-gray-50 border-t border-gray-300 shrink-0">
-          <div className="max-w-4xl mx-auto flex gap-3 relative">
-            <input
-              type="text"
-              value={followUpMessage}
-              onChange={(e) => onFollowUpChange?.(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask a follow-up question..."
-              disabled={isLoading || !hasConversation}
-              className="flex-grow p-4 rounded bg-white text-black border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black placeholder-gray-500 disabled:opacity-50 text-sm transition-colors"
-            />
-            <button
-              onClick={onFollowUpSubmit}
-              disabled={
-                isLoading || !hasConversation || !followUpMessage.trim()
-              }
-              className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded font-semibold transition-colors disabled:bg-gray-300 disabled:text-gray-500 text-sm flex items-center gap-2">
-              {isLoading ? "Thinking..." : "Send"}
-            </button>
-          </div>
-        </div>
+        </>
       )}
     </div>
   );
