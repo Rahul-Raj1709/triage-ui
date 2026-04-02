@@ -143,7 +143,7 @@ export default function UiDeveloperDashboard() {
                   fullText += parsed.text;
                   setCurrentStream(fullText);
                 }
-              } catch (err) {
+              } catch {
                 console.warn("Failed to parse SSE JSON:", dataStr);
               }
             }
@@ -183,32 +183,32 @@ export default function UiDeveloperDashboard() {
 
   // Helper to render Markdown components with custom Tailwind styling
   const markdownComponents = {
-    h1: ({ node, ...props }: any) => (
+    h1: ({ node: _node, ...props }: any) => (
       <h1 className="text-2xl font-bold mt-6 mb-4 text-white" {...props} />
     ),
-    h2: ({ node, ...props }: any) => (
+    h2: ({ node: _node, ...props }: any) => (
       <h2 className="text-xl font-bold mt-6 mb-3 text-white" {...props} />
     ),
-    h3: ({ node, ...props }: any) => (
+    h3: ({ node: _node, ...props }: any) => (
       <h3 className="text-lg font-bold mt-5 mb-2 text-white" {...props} />
     ),
-    p: ({ node, ...props }: any) => (
+    p: ({ node: _node, ...props }: any) => (
       <p className="mb-4 text-gray-300 leading-relaxed last:mb-0" {...props} />
     ),
-    ul: ({ node, ...props }: any) => (
+    ul: ({ node: _node, ...props }: any) => (
       <ul className="list-disc pl-6 mb-4 space-y-2 text-gray-300" {...props} />
     ),
-    ol: ({ node, ...props }: any) => (
+    ol: ({ node: _node, ...props }: any) => (
       <ol
         className="list-decimal pl-6 mb-4 space-y-2 text-gray-300"
         {...props}
       />
     ),
-    li: ({ node, ...props }: any) => <li className="pl-1" {...props} />,
-    strong: ({ node, ...props }: any) => (
+    li: ({ node: _node, ...props }: any) => <li className="pl-1" {...props} />,
+    strong: ({ node: _node, ...props }: any) => (
       <strong className="font-semibold text-gray-100" {...props} />
     ),
-    code({ node, inline, className, children, ...props }: any) {
+    code({ node: _node, inline, className, children, ...props }: any) {
       const match = /language-(\w+)/.exec(className || "");
       return !inline && match ? (
         <CodeBlock
