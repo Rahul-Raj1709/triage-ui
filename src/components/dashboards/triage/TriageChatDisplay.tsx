@@ -12,6 +12,10 @@ interface TriageChatDisplayProps {
   jsonResult: TriageResult | null;
   endOfLogRef: RefObject<HTMLDivElement | null>;
   TriageResultDisplay: React.ComponentType<TriageResult>;
+  followUpMessage?: string;
+  onFollowUpChange?: (message: string) => void;
+  onFollowUpSubmit?: () => void;
+  hasConversation?: boolean;
 }
 
 export function TriageChatDisplay({
@@ -22,7 +26,17 @@ export function TriageChatDisplay({
   jsonResult,
   endOfLogRef,
   TriageResultDisplay,
+  followUpMessage = "",
+  onFollowUpChange,
+  onFollowUpSubmit,
+  hasConversation = false,
 }: TriageChatDisplayProps) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" && followUpMessage.trim() && !isLoading) {
+      onFollowUpSubmit?.();
+    }
+  };
+
   return (
     <div className="lg:col-span-3 flex flex-col bg-white rounded border border-gray-300 overflow-hidden min-h-0 relative">
       {/* Top Bar */}
@@ -69,6 +83,31 @@ export function TriageChatDisplay({
             <StreamingMessage content={currentStream} agentColor="black" />
           )}
           <div ref={endOfLogRef} />
+        </div>
+      )}
+
+      {/* Follow-up Chat Input */}
+      {mode === "stream" && hasConversation && (
+        <div className="p-4 bg-gray-50 border-t border-gray-300 shrink-0">
+          <div className="max-w-4xl mx-auto flex gap-3 relative">
+            <input
+              type="text"
+              value={followUpMessage}
+              onChange={(e) => onFollowUpChange?.(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Ask a follow-up question..."
+              disabled={isLoading || !hasConversation}
+              className="flex-grow p-4 rounded bg-white text-black border border-gray-300 focus:outline-none focus:ring-2 focus:ring-black placeholder-gray-500 disabled:opacity-50 text-sm transition-colors"
+            />
+            <button
+              onClick={onFollowUpSubmit}
+              disabled={
+                isLoading || !hasConversation || !followUpMessage.trim()
+              }
+              className="bg-black hover:bg-gray-800 text-white px-8 py-4 rounded font-semibold transition-colors disabled:bg-gray-300 disabled:text-gray-500 text-sm flex items-center gap-2">
+              {isLoading ? "Thinking..." : "Send"}
+            </button>
+          </div>
         </div>
       )}
     </div>
