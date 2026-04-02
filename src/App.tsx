@@ -20,8 +20,8 @@ function App() {
         <UiDeveloperDashboard />
       </div>
 
-      {/* Tab Switcher - Floating in top-left corner - Minimal anime style */}
-      <div className="fixed top-6 left-6 z-50 flex gap-1 bg-white border border-gray-300 rounded-lg p-1 shadow-md">
+      {/* Tab Switcher - Centered at top - Minimal anime style */}
+      <div className="fixed top-6 left-1/2 transform -translate-x-1/2 z-50 flex gap-1 bg-white border border-gray-300 rounded-lg p-1 shadow-md">
         <button
           onClick={() => setActiveTab("ui")}
           className={`px-4 py-2 rounded font-medium transition-all text-sm ${
