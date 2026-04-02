@@ -24,18 +24,18 @@ export function TriageChatDisplay({
   TriageResultDisplay,
 }: TriageChatDisplayProps) {
   return (
-    <div className="lg:col-span-3 flex flex-col bg-[#141414] rounded-2xl border border-gray-800 shadow-xl overflow-hidden min-h-0 relative">
+    <div className="lg:col-span-3 flex flex-col bg-white rounded border border-gray-300 overflow-hidden min-h-0 relative">
       {/* Top Bar */}
-      <div className="flex items-center px-6 py-4 border-b border-gray-800 bg-[#1a1a1a] shrink-0 z-10">
+      <div className="flex items-center px-6 py-4 border-b border-gray-300 bg-gray-50 shrink-0 z-10">
         <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-full bg-purple-500/10 flex items-center justify-center">
-            <AlertTriangle className="w-4 h-4 text-purple-500" />
+          <div className="w-8 h-8 rounded flex items-center justify-center bg-black">
+            <AlertTriangle className="w-4 h-4 text-white" />
           </div>
           <div>
-            <h3 className="text-sm font-semibold text-gray-200">
+            <h3 className="text-sm font-semibold text-black">
               System Triage Squad
             </h3>
-            <p className="text-xs text-gray-500">SRE & Developer Agents</p>
+            <p className="text-xs text-gray-600">SRE & Developer Agents</p>
           </div>
         </div>
       </div>
@@ -49,11 +49,11 @@ export function TriageChatDisplay({
 
       {/* Stream Mode Display */}
       {mode === "stream" && (
-        <div className="flex-1 p-6 overflow-y-auto space-y-8 bg-[#141414]">
+        <div className="flex-1 p-6 overflow-y-auto space-y-8 bg-white">
           {messages.length === 0 && !isLoading && (
-            <div className="flex flex-col items-center justify-center h-full text-gray-600 space-y-4">
-              <AlertTriangle size={56} className="opacity-20" />
-              <p className="text-sm">
+            <div className="flex flex-col items-center justify-center h-full text-gray-400 space-y-4">
+              <AlertTriangle size={56} className="opacity-30" />
+              <p className="text-sm text-gray-600">
                 Awaiting alert... Click 'Start Triage' to begin analysis.
               </p>
             </div>
@@ -66,7 +66,7 @@ export function TriageChatDisplay({
 
           {/* Render Live Streaming Message */}
           {isLoading && currentStream && (
-            <StreamingMessage content={currentStream} agentColor="purple" />
+            <StreamingMessage content={currentStream} agentColor="black" />
           )}
           <div ref={endOfLogRef} />
         </div>
